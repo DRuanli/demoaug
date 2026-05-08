@@ -1,0 +1,1038 @@
+\documentclass[a4paper,fleqn]{cas-sc}
+\usepackage{wasysym}
+\usepackage[authoryear,longnamesfirst]{natbib}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{textcomp}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{float}
+\usepackage{anyfontsize}
+\usepackage{t1enc}
+
+\def\tsc#1{\csdef{#1}{\textsc{\lowercase{#1}}\xspace}}
+\tsc{WGM}
+\tsc{QE}
+
+\newdefinition{definition}{Definition}
+\newdefinition{rmk}{Remark}
+\pdfobjcompresslevel=0
+
+\begin{document}
+\let\WriteBookmarks\relax
+\def\floatpagepagefraction{1}
+\def\textpagefraction{.001}
+
+% Short title
+\shorttitle{Deployment-Honest Evaluation for Educational EWS}
+
+% Short author
+\shortauthors{N. Le, T. Lam, H-P Duong}
+
+% Main title of the paper
+\title[mode = title]{%
+  Behavioural Leakage and the Illusion of Actionability: A Deployment-Honest Evaluation Framework for Educational Early Warning Systems%
+}
+
+% First author
+%
+\author[1]{Nguyen Le}[orcid=0009-0009-5517-9996]
+
+% Corresponding author indication
+\cormark[1]
+
+% Email id of the first author
+\ead{ledangnguyen.st@tdtu.edu.vn}
+
+% URL of the first author
+%\ead[url]{}
+
+% Credit authorship
+
+\credit{Conceptualization, Methodology, Formal analysis, Data curation, Visualization, Writing -- original draft, Writing -- review \& editing}
+
+% Address/affiliation
+\affiliation[1]{organization={Faculty of Information Technology, Ton Duc Thang University},
+            city={Ho Chi Minh City}, 
+            country={Vietnam}}
+
+\author[2]{Tri Lam}%[]
+
+% Footnote of the second author
+%\fnmark[2]
+
+% Email id of the second author
+%\ead{}
+
+% URL of the second author
+%\ead[url]{}
+
+% Credit authorship
+\credit{Validation, Investigation, Writing -- review \& editing}
+
+% Address/affiliation
+\affiliation[2]{organization={University of Social Sciences and Humanities, Vietnam National University Ho Chi Minh City}, 
+            city={Ho Chi Minh City},
+            country={Vietnam}}
+
+\author[1]{Huu-Phuoc Duong}
+
+\ead{duonghuuphuoc@tdtu.edu.vn}
+
+\credit{Supervision, Writing -- review \& editing}
+
+% Corresponding author text
+\cortext[1]{Corresponding author}
+
+% Footnote text
+%\fntext[1]{}
+
+
+
+% Here goes the abstract
+\begin{abstract}
+Educational Early Warning Systems (EWS) rely on feature-selection components that systematically conflate retrospective accuracy with operational utility. We identify and formalise two failure modes specific to this context: Behavioural Leakage, in which selectors draw signal from student behaviours unobservable at the prediction horizon, and the Illusion of Actionability, in which metrics report high intervention utility for temporally unavailable features. To address these failures we contribute formal characterisations of both failure modes, two deployment-honest metrics that collapse to zero whenever temporal honesty or actionability fails, a Deployment-Realistic Evaluation (DRE) protocol that audits any EWS as a standalone instrument without retraining, and a reference instantiation called Intervention-Constrained Feature Selection (IC-FS) that integrates all three into a complete pipeline. Experiments across three public benchmarks and a real secondary-school cohort in Vietnam show that conventional metrics grow more misleading as feature budgets expand, that actionability weighting is significant across all ablation cells with large effect sizes, and that IC-FS leads on deployment-honest utility across benchmark and deployment cells, with a substantial reduction in academic-support budget at the school site and no loss in intervention coverage.
+\end{abstract}
+
+% Use if graphical abstract is present
+%\begin{graphicalabstract}
+%\includegraphics{}
+%\end{graphicalabstract}
+
+% Research highlights
+\begin{highlights}
+\item Behavioural Leakage and Illusion of Actionability formalised as EWS failure modes.
+\item $\mathrm{IUS}_{deploy}$ is zero when temporal honesty or actionability fails.
+\item DRE protocol audits any EWS selector without retraining or pipeline changes.
+\item Leakage coefficient $\tau$ rises monotonically with budget size.
+\item School deployment: high budget reduction with no loss in intervention coverage.
+\end{highlights}
+
+
+% Keywords
+% Each keyword is seperated by \sep
+\begin{keywords}
+ Educational Early Warning System \sep Feature Selection \sep Behavioural Leakage \sep Intervention Utility \sep Learning Analytics \sep Temporal Data Leakage
+\end{keywords}
+
+\maketitle
+
+% Main text
+\section{Introduction}
+\label{sec:intro}
+
+An educational Early Warning System (EWS) that identifies at-risk students yet recommends interventions which institutions cannot operationalise has, in effect, failed its purpose. Such a system consumes scarce advisory resources, distorts staff incentives, and, most damagingly, fosters institutional confidence in a decision-support layer whose recommendations are not reproducible at the time and at the budget of actual deployment. The defining challenge in educational decision-support research is therefore not the maximisation of retrospective predictive accuracy, but the alignment of that accuracy with the operational constraints of intervention timing and intervention feasibility, a concern that conventional evaluation protocols address only implicitly, if at all.
+
+Predictive performance on benchmark educational datasets has improved markedly over the past decade. Systems that combine assessment patterns, virtual learning environment (VLE) engagement signals, and demographic indicators routinely report weighted-$F_1$ scores above $80\%$ at
+mid-to-late course stages \citep{hlosta2017,waheed2020}. The Open University Learning Analytics Dataset (OULAD) \citep{kuzilek2017}---32{,}593 student--module enrolments with detailed behavioural records which has become a standard benchmark, and is frequently cited as evidence that learning-analytics components are ready for institutional adoption. A growing body of work, however, finds that the evaluation protocols underlying these results do not adequately capture
+deployment risk \citep{gardner2018,chen2020,rizvi2019,hussain2019}: the conditions under which an EWS performs well retrospectively differ substantially from the conditions under which it must operate when an advisor needs a recommendation for a student currently enrolled.
+
+Consider an EWS trained and evaluated at the start of a course, which is the point at which intervention has the greatest potential payoff. Suppose the selected feature set includes total VLE clicks since course start. Retrospectively, the feature is both predictive (engagement correlates
+with outcome) and nominally actionable (advisors can in principle nudge disengaged students); the model may report weighted $F_1 > 75\%$ with a high actionability ratio. Yet at the deployment of the beginning of the course, no student has clicked anything. The recommendation to ``focus on low-engagement students'' references a quantity that does not yet exist in the institutional information system. The classifier, by every conventional metric, looks deployable; in practice, every prediction it issues is built on a feature whose value will not become observable until several weeks into the course, by which point the early-intervention window has closed.
+
+We refer to this phenomenon as Behavioural Leakage: the use, at selection or evaluation time, of features that encode student behaviours which are historically attested in the training cohort but are unobservable for the cohort being predicted. Behavioural Leakage is strictly distinct from classical statistical data leakage \citep{kaufman2012,kapoor2023}, in which the outcome itself contaminates the predictors, and from the well-known problem of non-actionable demographic features \citep{baker2014}. It is the failure mode in which the selected feature is simultaneously predictive and pedagogically actionable, yet does not exist at the prediction horizon. Conventional
+train/test splits do not distinguish features fully observed at horizon $h$ from features finalised after $h$, and consequently allow Behavioural Leakage to pass evaluation undetected. Composite metrics that combine predictive performance with actionability inherit the same blind spot, producing what we term the Illusion of Actionability: a model reports high intervention utility for features that do not yet exist at deployment.
+
+Resolving these failures requires three coordinated advances: a formal characterisation of the failure modes themselves so that they can be measured and audited; deployment-honest metrics that operationalise the characterisation as a single auditable score; and an evaluation protocol that simulates inference-time blindness without requiring methodological adoption beyond the audit itself. This paper formalises two failure modes that conventional protocols admit silently, and instantiates the formalisation as a decision-support framework. The framework operationalises temporal honesty through three coordinated mechanisms: (i) a hard temporal-availability filter that restricts the candidate feature set to variables observable at the chosen prediction horizon; (ii) a continuous actionability--prediction trade-off score, optimised over a nested-validation grid that decouples hyper-parameter selection from test-set evaluation; and (iii) a Deployment-Realistic Evaluation (DRE) protocol that simulates inference-time blindness by masking horizon-unavailable features in the test matrix with training-set means, while leaving the training matrix intact. The framework is instantiated as Intervention-Constrained Feature Selection (IC-FS) and is paired with two new deployment-honest metrics, $\mathrm{AR}_{available}$ and $\mathrm{IUS}_{deploy}$, which are zero by construction whenever the selection draws its actionability from temporally-unavailable features.
+
+The principal contributions of the paper are as follows. 
+\begin{itemize}
+    \item \textbf{Formalisation of two deployment failure modes.} We give Behavioural Leakage and the Illusion of Actionability precise mathematical characterisations in terms of the temporal-availability function $\delta$ and the actionability weight $\omega$, strictly separated from classical data leakage and from causal non-actionability.
+
+    \item \textbf{Two deployment-honest metrics as primary evaluation
+    instruments.}
+    $\mathrm{AR}_{available}$ credits only features that are simultaneously actionable and observable at the prediction horizon. $\mathrm{IUS}_{deploy}$ is zero whenever either temporal honesty or actionability fails, providing institutions with a single auditable score that captures both properties. These metrics are implementation-agnostic: they assess any feature selector, not only IC-FS.
+     
+    \item \textbf{The DRE protocol as a reusable deployment-honesty audit.}
+    The Deployment-Realistic Evaluation protocol simulates inference-time blindness by masking horizon-unavailable features in the test matrix, while leaving the training matrix intact. It is applicable as a standalone diagnostic to any decision-support EWS and requires no additional modelling beyond the already-fitted classifier. 
+    \item \textbf{A reference instantiation, IC-FS.} Intervention-Constrained Feature Selection (IC-FS) integrates the temporal-availability filter (Contribution 1), the deployment-honest metrics (Contribution 2), and the DRE protocol (Contribution 3) into a single nested-validation feature-selection pipeline. IC-FS is positioned as a reference instantiation rather than as a novel algorithmic contribution: its purpose is to demonstrate that the three preceding contributions are jointly operationalisable, and to provide the empirical vehicle through which their behaviour is validated across three public benchmark datasets and one real deployment cohort
+\end{itemize}
+
+The remainder of the paper is organised as follows. Section~\ref{sec:related_work} positions the contributions against the educational-data-mining, leakage-aware evaluation, and recourse-aware machine-learning literatures. Section~\ref{sec:methodology} formalises the deployment-honest metrics, the DRE protocol, and the IC-FS framework. Section~\ref{sec:experiments} describes the cross-dataset experimental design. Section~\ref{sec:results} reports the empirical findings. Section~\ref{sec:discussion} discusses deployment implications, limitations, and future work. Section~\ref{sec:conclusions} concludes.
+\section{Related Work}
+\label{sec:related_work}
+ 
+\subsection{Educational Data Mining and Early Warning Systems}
+ 
+Educational data mining (EDM) applies computational methods to learning-related data with the goal of improving educational processes and outcomes \citep{romero2010}. Over the past two decades, predicting student success and the early identification of at-risk learners have been central research foci, with timely identification enabling targeted interventions such as tutoring, counselling, and engagement outreach that reduce dropout and academic failure \citep{arnold2012,jayaprakash2014}.
+ 
+Early institutional systems, such as Course Signals at Purdue University \citep{arnold2012}, demonstrated feasibility by integrating LMS activity, instructor interaction, and demographic indicators through a traffic-light risk interface.
+Later systems drew on wider data types including VLE clickstream records, assessment-submission patterns, and engagement metrics \citep{hlosta2017,waheed2020}. The OULAD dataset \citep{kuzilek2017} --- 32,593 student--module enrolments with detailed VLE behavioural records --- became the standard benchmark; prediction models on OULAD have reported weighted-$F_1$ scores above 80\% at mid-to-late course stages using logistic regression, gradient boosting, and deep-learning classifiers \citep{hlosta2017,waheed2020}.
+ 
+A growing body of evidence, however, identifies a gap between retrospective accuracy and operational utility. \citet{gardner2018} showed that high-accuracy EWS selectors often favour demographic features (e.g., prior failure and socioeconomic status) that advisors cannot act on. \citet{rizvi2019} documented a gap between generating risk scores and constructing practical intervention workflows. \citet{hussain2019} found that models achieving high accuracy in retrospective evaluation perform substantially worse under deployment conditions. These findings motivate the two deployment failure modes formalised in this paper.
+ 
+\subsection{Feature Selection in Educational Prediction}
+ 
+Feature selection reduces model complexity and improves generalisation by identifying which student attributes inform interventions most effectively \citep{marquez2016,conijn2017}. Filter methods such as chi-squared, mutual information, and Pearson correlation are fast but ignore feature interactions; wrapper methods such as recursive elimination evaluate subsets directly on classification performance but are computationally intensive on large datasets. Ensemble filter approaches combine multiple scorers to offset individual biases and yield stable rankings \citep{meinshausen2010}; the predictive scorer in IC-FS follows this design.
+ 
+Multi-objective methods balance competing criteria. NSGA-II \citep{deb2002} and its successors optimise accuracy,
+interpretability, and sparsity jointly. Stability selection \citep{meinshausen2010} uses bootstrap subsampling and $L_1$-regularised regression to control the false-positive rate across features; \citet{nogueira2018} showed that stability indices above $J = 0.8$ are achievable with sufficient resampling on moderately sized
+datasets. The Boruta algorithm \citep{kursa2010} uses random-forest shadow features to identify all above-chance predictors, but can return large feature sets from correlated data, complicating intervention design.
+ 
+Studies on the UCI Student Performance dataset \citep{cortez2008} have consistently identified past grades, study commitment, and academic support
+as outcome predictors \citep{marquez2016,conijn2017}. These studies confirm the dataset's suitability for cross-horizon evaluation but do not formalise horizon-conditioned feature availability as a selection constraint which is a gap this paper addresses.
+ 
+A recurring limitation of educational feature selectors is their focus on retrospective accuracy without verifying that selected features will be
+present when deployment decisions must be made. \citet{chen2020} examined how prediction timing affects early dropout detection but did not formalise the boundary between features observable at a given horizon and those that become available only later. \citet{waheed2020} found that early VLE engagement features are pedagogically actionable yet did not develop methods to enforce temporal availability at selection time.
+These works collectively reveal that no existing method ensures the selected feature set is simultaneously temporally available and pedagogically actionable at the desired prediction horizon.
+ 
+\subsection{Deployment Failure Modes and Evaluation Integrity}
+\label{sec:related_work:leakage}
+ 
+The contamination of training or evaluation data by information that would be unavailable in deployment is known as data leakage, a phenomenon that threatens the reproducibility and practical validity of machine learning models \citep{kaufman2012,kapoor2023,apicella2025}. \citet{kapoor2023} documented eleven leakage patterns across published machine learning studies, demonstrating that retrospective performance estimates are systematically inflated when leakage goes undetected.
+In EDM, leakage has been partially addressed by separating static and dynamic features \citep{hlosta2017} and by using time-based train--test splits \citep{chen2020}; \citet{gardner2018, glandorf2024} found that predictive results vary substantially with the choice of temporal split.
+ 
+Existing leakage-aware evaluation protocols detect contamination retrospectively, either by auditing the training pipeline or by
+constructing temporally ordered splits. The Deployment-Realistic Evaluation (DRE) protocol introduced in Section~\ref{sec:icfs:metrics:dre} addresses a complementary concern: it simulates inference-time feature blindness post-fitting, by masking horizon-unavailable features in the test matrix while leaving
+the training matrix intact. This allows institutions to audit a deployed classifier's deployment penalty without retraining or modifying the existing inference pipeline, and is compatible with any upstream temporal-split design.
+ 
+The failure mode specific to EWS that this paper formalises, \emph{Behavioural Leakage}, differs from classical statistical leakage \citep{kaufman2012,kapoor2023} in kind, not merely degree. Classical leakage occurs when the outcome contaminates the predictors. Behavioural Leakage occurs when the selected feature is simultaneously
+predictive, pedagogically actionable, and yet temporally unavailable at the prediction horizon; conventional train--test splits do not distinguish features fully observed at horizon $h$ from features finalised after $h$, and therefore pass Behavioural Leakage undetected. Composite metrics that report high intervention utility for such features produce the \emph{Illusion of Actionability}: a model appears deployment-ready by every conventional measure yet issues predictions built on quantities that do not yet exist in the institutional information system. To our knowledge, these two failure modes have not been jointly characterised or addressed in the prior literature.
+ 
+\subsection{Actionability and Intervention Utility in Machine Learning}
+\label{sec:related_work:actionability}
+ 
+The question of whether a model's outputs can be acted upon has become central to the fairness, accountability, and transparency community. \citet{ustun2019} introduced actionable recourse as a formal criterion: given a classification decision, there exists a set of feature changes within the individual's control that would alter the prediction. This definition operates at the inference stage, identifying post-hoc changes that would benefit an individual, rather than at the selection stage, which concerns which features are chosen during model development. \citet{karimi2020} extended the recourse framework to counterfactual interventions respecting causal constraints, again in the context of individual-level explanations.
+ 
+In educational research, actionability is often discussed informally. \citet{baker2014} noted that EWS models should prioritise features advisors can influence over features they cannot. \citet{siemens2012} emphasised that learning analytics should support human decision processes, suggesting actionable features warrant prioritisation. However, this criterion has not been formally integrated into feature selection objective functions or evaluation metrics; when studies report high actionability fractions they typically refer to pedagogical potential (the theoretical capacity of a feature to inform intervention if it were available) rather than deployment reality.
+ 
+This gap motivates the $\mathrm{IUS}_{deploy}$ metric introduced in Section~\ref{sec:icfs:metrics}. The closest antecedent is the informal co-reporting of accuracy and
+actionability in EWS summaries \citep{arnold2012,jayaprakash2014, herodotou2023}, where no formal definition, deployment-realistic computation protocol, or mechanism to penalise either component's failure has been established. $\mathrm{IUS}_{deploy}$ addresses all three deficiencies: both components are computed under deployment-realistic conditions ($F_1^{deploy}$ via DRE-masked evaluation; $\mathrm{AR}_{available}$ via strict temporal intersection), eliminating the circular inflation that occurs when actionability is assessed using future feature values. Crucially, $\mathrm{IUS}_{deploy}$ and the DRE protocol are implementation-agnostic: they can audit any feature selector, not only the IC-FS instantiation proposed in Section~\ref{sec:methodology}.
+\section{A Deployment-Honest Framework for Intervention-Constrained Feature Selection}
+\label{sec:methodology}
+
+This section delivers the three contributions announced in Section~\ref{sec:intro}, in the order in which they motivate the framework. We adopt the notation summarised in Table~\ref{tab:notation} and use it throughout the paper.
+
+\begin{table}[htbp]
+\caption{Notation used throughout the paper.}
+\label{tab:notation}
+\centering
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{ll}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$\mathcal{D} = \{(x_i, y_i)\}_{i=1}^{N}$ & Dataset of $N$ student records \\
+$x_i \in \mathbb{R}^P$              & Feature vector for record $i$ \\
+$y_i \in \{0, 1\}$                  & Binary outcome (1 = pass, 0 = at-risk) \\
+$\mathcal{F} = \{f_1, \ldots, f_P\}$ & Full feature set \\
+$h \in \{0, 1, \ldots, H\}$         & Prediction horizon (course-time index) \\
+$\delta : \mathcal{F} \times \mathbb{N} \to \{0,1\}$ &
+  Temporal-availability indicator \\
+$\omega : \mathcal{F} \to [0, 1]$   & Actionability weight function \\
+$\mathcal{F}_{avail}(h)$            & $\{f \in \mathcal{F} : \delta(f, h) = 1\}$ \\
+$S \subseteq \mathcal{F}$           & Selected feature subset \\
+$k$                                 & Top-$k$ feature budget \\
+$\alpha \in [0, 1]$                 & Predictive--actionable trade-off parameter \\
+$\alpha^*$                          & Validated trade-off chosen by Algorithm~\ref{alg:icfs} \\
+$\mathrm{pred\_score}(j)$           & Ensemble predictive score of feature $f_j$ \\
+$\mathrm{IC}(j, \alpha)$            & Intervention-constrained score \\
+$\mathrm{AR}(S)$                    & Conventional actionability ratio (baseline) \\
+$\mathrm{AR}_{available}(S, h)$     & Deployment-realistic actionability ratio \\
+$F_1^{paper}, F_1^{deploy}$         & Standard and DRE-masked weighted $F_1$ \\
+$\mathrm{IUS}_{paper}, \mathrm{IUS}_{deploy}$ & Paper-style and deployment-honest IUS \\
+$\tau(S, h)$                        & Leakage coefficient: $1 - \mathrm{AR}_{available} / \mathrm{AR}$ \\
+$B$                                 & Bootstrap resamples for stability \\
+$J$                                 & Pairwise Jaccard stability \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% --------------------------------------------------------------------
+\subsection{Overview of the Framework}
+\label{sec:icfs:overview}
+%% --------------------------------------------------------------------
+
+Figure~\ref{fig:icfs_architecture} summarises the framework as six sequential stages operating on external inputs at a chosen prediction horizon $h$. Stage~1 enforces a hard temporal filter that retains only those features fully observable at horizon~$h$. Stage~2 applies a nested validation split that isolates the test set from hyper-parameter selection. Stage~3 computes an ensemble predictive score on the inner training data using four complementary scorers~\citep{chandrashekar2014}. Stage~4 sweeps a discrete grid of the trade-off parameter $\alpha \in [0, 1]$, evaluates each candidate set on the inner validation split using the deployment-realistic Intervention Utility Score, and selects the optimal value $\alpha^*$. Stage~5 retrains on the full training data using $\alpha^*$ to maximise the effective sample size. Stage~6 evaluates the final classifier under the Deployment-Realistic Evaluation (DRE) protocol, which masks temporally-unavailable features in the test matrix with training-set means~\citep{kaufman2012,kapoor2023}.
+
+Two design principles distinguish the framework from prior feature-selection pipelines in educational data mining~\citep{romero2020,viberg2018}. First, temporal availability is treated as a hard constraint, not as a soft objective: features unobservable at horizon~$h$ are excluded by Stage~1 before any scoring takes place.
+Second, the test set is never consulted during hyper-parameter selection, eliminating the indirect test-set leakage documented for prior nested-tuning protocols~\citep{kaufman2012,kapoor2023}.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\linewidth]{figures/methodology/Figure_1_Pipeline}
+    \caption{IC-FS pipeline. The six-stage framework proceeds from temporal filtering (Stage~1) through nested-validation scoring (Stages~2--4) to full-data training (Stage~5) and deployment-realistic evaluation under DRE masking (Stage~6).}
+    \label{fig:icfs_architecture}
+\end{figure}
+
+
+%% --------------------------------------------------------------------
+\subsection{Two Deployment Failure Modes}
+\label{sec:icfs:failures}
+%% --------------------------------------------------------------------
+
+The framework is built around two failure modes that conventional educational-data-mining protocols admit but do not detect. Both modes are
+strictly distinct from classical statistical data leakage~\citep{kaufman2012,kapoor2023}, in which the outcome variable contaminates the predictors, and from causal
+non-actionability~\citep{baker2014}, which concerns features that cannot support any institutional intervention regardless of timing. The failure modes addressed here are deployment-specific: every feature involved is both predictively informative and pedagogically actionable in principle, yet at least one component of its operational status, namely temporal availability, fails at the horizon at which the recommendation must be issued.
+
+We use two structural primitives to characterise the failure modes formally. The first is the temporal-availability indicator $\delta : \mathcal{F} \times \mathbb{N} \to \{0, 1\}$, with $\delta(f, h) = 1$ if and only if feature $f$ has been fully observed for every record by horizon $h$. The second is the actionability weight
+$\omega : \mathcal{F} \to [0, 1]$, which encodes the pedagogical feasibility of an institutional intervention upon the feature. Both primitives are obtained from a domain derived taxonomy and are formalised in Section~\ref{sec:icfs:notation}; the failure-mode definitions are stated here so that the remainder of the framework can be motivated by what it is designed to prevent.
+
+\begin{definition}[Behavioural Leakage]
+\label{def:behavioural_leakage}
+A feature $f \in \mathcal{F}$ participates in Behavioural Leakage at horizon $h$ if and only if it is pedagogically actionable but temporally unobservable at $h$, that is,
+\begin{equation}
+    \omega(f) > 0 \quad \wedge \quad \delta(f, h) = 0.
+    \label{eq:behavioural_leakage}
+\end{equation}
+A selected set $S \subseteq \mathcal{F}$ exhibits Behavioural Leakage at horizon $h$ if there exists at least one $f \in S$ satisfying Equation~\eqref{eq:behavioural_leakage}.
+\end{definition}
+
+Behavioural Leakage is a feature-level pathology: a single offending feature is sufficient to render the selection deployment-dishonest at horizon $h$. The recommendation derived from the model references a quantity that does not yet exist in the institutional information system, and the predicted outcome cannot be reproduced at deployment without substituting the offending feature with a placeholder, thereby altering the inference pipeline relative to the one evaluated at training time.
+
+\begin{definition}[Illusion of Actionability]
+\label{def:illusion_actionability}
+A selected set $S \subseteq \mathcal{F}$ exhibits the Illusion of Actionability at horizon $h$ if every feature contributing to its nominal actionability participates in Behavioural Leakage, that is,
+\begin{equation}
+    \mathrm{AR}(S) > 0 \quad \text{and} \quad
+    \mathrm{AR}_{available}(S, h) = 0,
+    \label{eq:illusion_actionability}
+\end{equation}
+where $\mathrm{AR}$ and $\mathrm{AR}_{available}$ are defined in Equations~\eqref{eq:ar} and~\eqref{eq:ar_available} below.
+\end{definition}
+
+The two failure modes are related but not identical. Behavioural Leakage is defined at the level of an individual feature; the Illusion of Actionability is the limiting case at the level of a selection in which every actionable feature in $S$ participates in Behavioural Leakage. Equivalently, Behavioural Leakage is detectable on inspection of any single column, whereas the Illusion of Actionability is detected only by the joint structural collapse of the actionable--and--available intersection. Conventional composite metrics that compose predictive performance with the unconstrained actionability ratio~\citep{baker2014,siemens2012} are insensitive to both modes: a selection that exhibits the Illusion of Actionability can attain high nominal scores while delivering, at deployment, a recommendation list whose actionable content is empty.
+
+The framework addresses both modes by construction. The hard temporal filter (Stage~1, Section~\ref{sec:icfs:overview}) eliminates Behavioural Leakage at the candidate-set level. The deployment-honest metric $\mathrm{IUS}_{deploy}$ defined in Section~\ref{sec:icfs:metrics} collapses to zero whenever $S$ exhibits the Illusion of Actionability, providing a single auditable scalar that flags the failure regardless of which selector produced $S$.
+
+
+%% --------------------------------------------------------------------
+\subsection{Notation and Problem Formulation}
+\label{sec:icfs:notation}
+%% --------------------------------------------------------------------
+
+Let $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^{N}$ denote a labelled dataset of $N$ student records, where $x_i \in \mathbb{R}^P$ is a feature vector drawn from the full feature set $\mathcal{F} = \{f_1, \ldots, f_P\}$ and $y_i \in \{0, 1\}$ is a binary outcome. The prediction horizon $h \in \{0, 1, \ldots, H\}$ is measured in course time at which a deployed model is expected to issue predictions.
+
+The temporal-availability indicator $\delta$ and the actionability weight $\omega$ introduced informally in Section~\ref{sec:icfs:failures} are formalised as
+\begin{align*}
+    \delta &: \mathcal{F} \times \mathbb{N} \to \{0, 1\}, \\
+    \omega &: \mathcal{F} \to [0, 1].
+\end{align*}
+Both functions are obtained from a domain-derived taxonomy (Section~\ref{sec:icfs:taxonomy}) and are treated as fixed inputs. Let $\mathcal{F}_{avail}(h) = \{f \in \mathcal{F} : \delta(f, h) = 1\}$denote the set of features fully observable by horizon $h$.
+
+Given a deployment horizon $h$ and a feature budget $k \in \mathbb{N}^+$, the framework solves the constrained optimisation
+\begin{equation}
+    S^*(h, k)
+    = \arg\max_{\substack{S \subseteq \mathcal{F}_{avail}(h) \\ |S| = k}}
+        \;\mathrm{IUS}_{deploy}\bigl(S, h\bigr),
+    \label{eq:problem_formulation}
+\end{equation}
+where the deployment-honest objective $\mathrm{IUS}_{deploy}$ is defined in Equation~\eqref{eq:ius_deploy}. The constraint $S \subseteq \mathcal{F}_{avail}(h)$ guarantees, by construction, that the solution $S^*(h, k)$ is free of Behavioural Leakage (Definition~\ref{def:behavioural_leakage}) at horizon $h$. Standard predictive feature selection corresponds to the special case in which both this constraint and the actionability term in $\mathrm{IUS}_{deploy}$ are removed; the framework retains both.
+
+
+
+%% --------------------------------------------------------------------
+\subsection{Feature Taxonomy}
+\label{sec:icfs:taxonomy}
+%% --------------------------------------------------------------------
+
+The taxonomy supplies the two structural primitives $\delta$ and $\omega$ required by Definitions~\ref{def:behavioural_leakage} and~\ref{def:illusion_actionability}. It partitions $\mathcal{F}$ into four tiers along two orthogonal axes: the temporal-availability profile encoded by $\delta$ and the actionability weight encoded by $\omega$. The taxonomy design is motivated by the empirical observation that accuracy-optimising selectors systematically favour fully observable yet non-modifiable demographic attributes at the expense of features upon which institutions can realistically act~\citep{baker2014,delen2010}. Formalising $\omega$ as a continuous weight rather than a binary flag permits a principled, gradient-based trade-off between predictive utility and intervention feasibility.
+
+\begin{figure}[pos=htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/methodology/Figure_2_availability_matrix}
+    \caption{Temporal-availability matrix $\delta(f,h)$ for the OULAD taxonomy. Filled cells ($\delta=1$) indicate features observable at horizon $h$; empty cells ($\delta=0$) are masked by the DRE protocol. Actionability weights $\omega$ are annotated on the right axis.}
+    \label{fig:availability_matrix}
+\end{figure}
+
+Table~\ref{tab:tier_spec} provides the complete formal specification of all four tiers. Three design properties warrant explicit statement.
+
+First, the weight $\omega = 0.7$ assigned to Tier-2 engagement aggregates reflects the empirical finding that instructors can influence participation through targeted outreach and deadline reminders, but with demonstrably lower certainty than for Tier-1 pre-semester conditions~\citep{baker2014,siemens2012,hlosta2017}; the weight is therefore strictly interior to $(0, 1)$ rather than binary. The sensitivity of framework outputs to the specific value of $\omega_2$ is documented in Section~\ref{sec:results:alpha}.
+
+Second, features absent from the taxonomy receive the defensive default $\omega = 0$ and $\delta(\cdot, h) = 0$ for all $h$, ensuring that any feature inadvertently omitted is excluded from $\mathcal{F}_{avail}(h)$ and cannot induce silent Behavioural Leakage.
+
+Third, the taxonomy is dataset-agnostic in schema but dataset-specific in instantiation. On OULAD, the Tier-1 cardinality is one (\texttt{date\_registration}), reflecting the limited pre-semester institutional intervention surface. On the UCI Student Performance datasets, Tier-1 comprises nine pre-semester actionable features, reflecting the richer survey-based intervention surface. Figure~\ref{fig:availability_matrix} renders the resulting $\delta$-pattern as a tier-by-horizon matrix.
+
+\begin{table}[htbp]
+\caption{Four-tier feature taxonomy used by IC-FS. The actionability weight $\omega$ and temporal-availability function $\delta(f, h)$ are fixed inputs to Algorithm~\ref{alg:icfs}; features absent from the taxonomy receive the defensive default $\omega = 0$, $\delta(\cdot, h) = 0$ for all $h$.}
+\label{tab:tier_spec}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{1.1cm} p{0.9cm} p{2.4cm} p{7.8cm}}
+\toprule
+\textbf{Tier}
+    & \textbf{$\omega$}
+    & \textbf{$\delta(f, h)$}
+    & \textbf{Description} \\
+\midrule
+Tier~0
+    & $0.0$
+    & $1\ \forall\, h$
+    & Demographic and structural attributes observable from enrolment but
+      non-modifiable by any institutional intervention (e.g.\ gender,
+      prior academic record, socioeconomic band). \\[4pt]
+Tier~1
+    & $1.0$
+    & $1\ \forall\, h$
+    & Pre-semester choices or conditions that institutions can influence at
+      or before course start (e.g.\ registration timing, support
+      enrolment, study habits). \\[4pt]
+Tier~2
+    & $0.7$
+    & $0$ at $h{=}0$;\newline
+      $1$ for $h{\geq}1$
+    & Engagement aggregates produced by ongoing student participation;
+      unobservable at course start but actionable thereafter through
+      targeted outreach and deadline reminders. \\[4pt]
+Tier~3
+    & $0.0$
+    & deadline-\newline dependent
+    & Scores on completed assessments; highly predictive but not
+      retroactively modifiable, hence zero intervention utility.
+      Availability $\delta$ is determined per feature by the
+      assessment-deadline calendar. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+%% --------------------------------------------------------------------
+\subsection{Two Deployment-Honest Metrics}
+\label{sec:icfs:metrics}
+%% --------------------------------------------------------------------
+
+This subsection defines the two deployment-honest metrics that audit the failure modes of Section~\ref{sec:icfs:failures}. The first, $\mathrm{AR}_{available}$, gates the conventional actionability ratio by temporal availability and supplies a fine-grained measure of the Behavioural-Leakage exposure of any selection. The second, $\mathrm{IUS}_{deploy}$, multiplies $\mathrm{AR}_{available}$ by the deployment-realistic predictive performance and therefore collapses to zero whenever $S$ exhibits the Illusion of Actionability, providing the single-scalar audit announced as the second contribution of the paper.
+
+For comparison, we retain two prior-art quantities that the proposed metrics are designed to displace: the conventional actionability ratio
+\begin{equation}
+    \mathrm{AR}(S) = \frac{1}{|S|}\sum_{f \in S}\omega(f),
+    \label{eq:ar}
+\end{equation}
+and the paper-style intervention utility score $\mathrm{IUS}_{paper}(S) = F_1^{paper} \cdot \mathrm{AR}(S)$. Both are reported as diagnostic baselines and never subjected to optimisation.
+
+\subsubsection{The Deployment-Realistic Actionability Ratio}
+\label{sec:icfs:metrics:ar}
+
+The conventional ratio $\mathrm{AR}(S)$ averages actionability weights without regard to whether the selected features actually exist at prediction time. We define the deployment-realistic actionability ratio as the temporally gated arithmetic mean
+\begin{equation}
+    \mathrm{AR}_{available}(S, h)
+    = \frac{1}{|S|} \sum_{f \in S} \delta(f, h)\,\omega(f).
+    \label{eq:ar_available}
+\end{equation}
+Every feature contributes to $\mathrm{AR}_{available}$ only if it is simultaneously actionable ($\omega > 0$) and observable at horizon $h$
+($\delta = 1$). It follows that $\mathrm{AR}_{available}(S, h) \leq \mathrm{AR}(S)$, with equality if and only if $\delta(f, h) = 1$ for every $f \in S$. The discrepancy between the two ratios is captured by the leakage coefficient
+\begin{equation}
+    \tau(S, h)
+    = 1 \;-\; \frac{\mathrm{AR}_{available}(S, h)}{\mathrm{AR}(S)},
+    \qquad \mathrm{AR}(S) > 0,
+    \label{eq:tau}
+\end{equation}
+with the convention $\tau = 0$ when $\mathrm{AR}(S) = 0$. The coefficient quantifies the fraction of nominal actionability attributable to features not yet observable at horizon $h$. A selection that draws all of its actionability from temporally-unavailable features attains $\tau = 1$ and delivers zero $\mathrm{AR}_{available}$ at deployment, representing the limiting case that gives the Illusion of Actionability of Definition~\ref{def:illusion_actionability} a quantitative measure: a selection exhibits the Illusion of Actionability if and only if $\tau(S, h) = 1$.
+
+\subsubsection{The Intervention Utility Score}
+\label{sec:icfs:metrics:ius}
+
+The framework's primary metric is the Intervention Utility Score, defined as the product of the deployment-realistic predictive performance and the deployment-realistic actionability ratio:
+\begin{equation}
+    \mathrm{IUS}_{deploy}(S, h)
+    = F_1^{deploy}(S, h) \;\cdot\; \mathrm{AR}_{available}(S, h),
+    \label{eq:ius_deploy}
+\end{equation}
+where $F_1^{deploy}$ is the weighted $F_1$ obtained under the DRE protocol of Section~\ref{sec:icfs:dre}. Both factors lie in $[0, 1]$, so $\mathrm{IUS}_{deploy} \in [0, 1]$; reported values are scaled to percentage points $[0, 100]$ throughout. The multiplicative composition enforces a hard zero-gate that audits both failure modes jointly: $\mathrm{IUS}_{deploy}(S, h) = 0$ whenever $F_1^{deploy} = 0$ (a classifier that fails under DRE masking) or $\mathrm{AR}_{available} = 0$ (a selection that exhibits the Illusion of Actionability). A non-zero score therefore certifies the joint absence of both failures.
+
+
+Equation~\eqref{eq:ius_deploy} depends only on three inputs: a selected set $S$, a trained classifier $g$, and the taxonomy primitives $(\delta, \omega)$. None of these requires knowledge of how $S$ was produced. The metric therefore evaluates an NSGA-II selection, a Boruta selection, a Lasso selection, or even the binarisation of a soft attention map without modification. This implementation-agnostic property is what elevates $\mathrm{IUS}_{deploy}$ from an IC-FS-specific quantity to an audit instrument applicable to any decision-support system.
+
+
+%% --------------------------------------------------------------------
+\subsection{The DRE Protocol: A Reusable Deployment-Honesty Audit}
+\label{sec:icfs:dre}
+\label{sec:icfs:metrics:dre}
+%% --------------------------------------------------------------------
+
+The Deployment-Realistic Evaluation (DRE) protocol provides the $F_1^{deploy}$ factor required by Equation~\eqref{eq:ius_deploy}. Its purpose is broader than that role, however: DRE is a stand-alone audit instrument that takes as input any trained classifier $g$, any selected feature set $S$, the deployment horizon $h$, and the temporal-availability indicator $\delta$, and returns a deployment-realistic weighted $F_1$. It requires no knowledge of how $g$ was trained or how $S$ was produced, no retraining of $g$, and no modification of the existing inference pipeline beyond test-time column substitution. An institution running a baseline EWS in production can therefore apply DRE to diagnose the deployment-time penalty incurred by its current selector without adopting any other component of the framework.
+
+Standard evaluation in EDM trains and tests on the same static feature matrix, implicitly assuming that every selected feature is observable at deployment time~\citep{romero2020,viberg2018}; the resulting weighted $F_1$ is denoted $F_1^{paper}$. DRE removes this assumption via asymmetric masking, following the data-availability principles of the leakage literature~\citep{kaufman2012,kapoor2023,apicella2025}. The asymmetry reflects operational reality: institutions hold complete historical records for training, but must predict for a current cohort whose late-semester features do not yet exist.
+
+Formally, let $S$, $h$, $(X_{train}, y_{train})$, and $(X_{test}, y_{test})$ denote the selected feature set, deployment horizon, training data, and test data, respectively, and let $\delta(f, h) \in \{0, 1\}$ be the temporal-availability indicator. DRE proceeds in five steps:
+\begin{enumerate}
+  \item \textbf{Identify unavailable features.}\;
+        $S_{unavail} = \{f \in S \mid \delta(f, h) = 0\}$.
+  \item \textbf{Compute training-set column means.}\;
+        $\bar{x}_{f} = \tfrac{1}{n_{train}} \sum_{i=1}^{n_{train}}
+        [X_{train}]_{if}$ for each $f \in S_{unavail}$.
+  \item \textbf{Train on unmasked data.}\;
+        Fit classifier $g$ on the complete training matrix
+        $(X_{train}[\cdot, S],\; y_{train})$.
+  \item \textbf{Construct the deployment-realistic test matrix.}\;
+        Form $\widetilde{X}_{test}$ by replacing every entry in column
+        $f$ with $\bar{x}_{f}$ for each $f \in S_{unavail}$, leaving the
+        remaining columns unchanged.
+  \item \textbf{Evaluate under masking.}\;
+        Predict $\hat{y} = g(\widetilde{X}_{test})$ and report
+        $F_1^{deploy} = F_1(y_{test}, \hat{y})$.
+\end{enumerate}
+
+The protocol is structurally inactive when $S_{unavail} = \emptyset$, in which case $F_1^{deploy} \equiv F_1^{paper}$ and the audit reports no deployment penalty. This is the desirable behaviour for selectors that respect temporal availability by construction (such as IC-FS\,(full), Section~\ref{sec:icfs:algorithm}): DRE confirms that the selection is deployment-honest without altering its measured performance. When applied to selectors that ignore temporal availability---NSGA-II, Boruta, the ablation variant IC-FS\,(--temporal), or any baseline EWS in production that has not been audited for $\delta$---the masking step becomes active and the gap $F_1^{paper} - F_1^{deploy}$ measures the deployment penalty that the unaudited selector incurs.
+
+%% --------------------------------------------------------------------
+\subsection{Auxiliary Operational Metrics}
+\label{sec:icfs:metrics:budget}
+%% --------------------------------------------------------------------
+
+While $\mathrm{IUS}_{deploy}$ depends on the actionability taxonomy, we additionally report two taxonomy-independent operational metrics that match the resource constraints faced by real-world early warning systems. Let $k_{int} = \lceil 0.20 \cdot N_{test} \rceil$ denote a fixed 20\,\% intervention budget, a threshold widely adopted as a realistic upper bound on the fraction of students an institution can intervene upon at modest cost. Let $\mathcal{T}_{20}$ denote the set of test records with the lowest predicted probability of the favourable outcome under $g$. The budget-constrained metrics are
+\begin{equation}
+    \mathrm{Precision}_{20}
+    = \frac{|\{i \in \mathcal{T}_{20} : y_i = 0\}|}{k_{int}},
+    \qquad
+    \mathrm{Recall}_{20}
+    = \frac{|\{i \in \mathcal{T}_{20} : y_i = 0\}|}{\sum_i \mathbf{1}[y_i = 0]},
+    \label{eq:budget_metrics}
+\end{equation}
+where $\mathbf{1}[\cdot]$ denotes the indicator function. These metrics answer the operational question of how precisely and comprehensively a fixed-budget intervention policy can identify at-risk students without reference to any actionability taxonomy.
+
+
+%% --------------------------------------------------------------------
+\subsection{The IC-FS Algorithm}
+\label{sec:icfs:algorithm}
+%% --------------------------------------------------------------------
+
+The IC-FS algorithm instantiates the framework: it solves Equation~\eqref{eq:problem_formulation} by combining the temporal filter of Section~\ref{sec:icfs:taxonomy} with an ensemble predictive scorer, a convex actionability--prediction trade-off, and a nested-validation selection of the trade-off parameter. The algorithm is paired with the DRE protocol of Section~\ref{sec:icfs:dre} for evaluation and with the bootstrap-stability diagnostic of Section~\ref{sec:icfs:stability} for reproducibility.
+
+\subsubsection{Ensemble Predictive Scoring}
+\label{sec:icfs:pred_score}
+
+The predictive component of the IC score is an unweighted ensemble of four normalised feature scores, motivated by the observation that single-criterion scorers exhibit complementary failure modes~\citep{li2017,pes2020,chandrashekar2014}. For every feature $f_j \in \mathcal{F}_{avail}(h)$ we compute, on the inner training data:
+\begin{itemize}
+    \item $\hat\phi_{\chi^2}(j)$: the chi-squared statistic of $f_j$
+          against $y$, computed on a min--max rescaled feature matrix
+          $X_{[0, 1]}$ to satisfy the non-negativity requirement of
+          $\chi^2$;
+    \item $\hat\phi_{MI}(j)$: the mutual information between $f_j$ and
+          $y$, estimated from the original (unscaled) features by a
+          nearest-neighbour entropy estimator that is invariant to
+          monotone rescaling and would be biased by min--max scaling;
+    \item $\hat\phi_{corr}(j)$: the absolute Pearson correlation
+          $|\rho(f_j, y)|$, computed on the original features and set to
+          zero for features with near-zero variance;
+    \item $\hat\phi_{RF}(j)$: the impurity-based importance of $f_j$
+          obtained from a balanced Random Forest classifier with 100
+          trees, on the original features (tree-based methods are
+          scale-invariant by construction).
+\end{itemize}
+The asymmetric input treatment, specifically min--max scaling for $\chi^2$ only, raw features for the remaining three scorers---is dictated by each scorer's mathematical requirements rather than by a tuning choice. Each component is normalised to $[0, 1]$ via min--max rescaling $\hat\phi(j) = \bigl(\phi(j) - \min_{j'}\phi(j')\bigr) /
+\bigl(\max_{j'}\phi(j') - \min_{j'}\phi(j') + \epsilon\bigr)$, with $\epsilon = 10^{-10}$ guarding against division by zero. The ensemble predictive score is
+\begin{equation}
+    \mathrm{pred\_score}(j)
+    = \frac{1}{4}
+    \Bigl[
+        \hat\phi_{\chi^2}(j) + \hat\phi_{MI}(j)
+        + \hat\phi_{corr}(j) + \hat\phi_{RF}(j)
+    \Bigr],
+    \label{eq:pred_score}
+\end{equation}
+which lies in $[0, 1]$ by construction.
+
+\subsubsection{The Intervention-Constrained Score}
+\label{sec:icfs:ic_score}
+
+For a trade-off parameter $\alpha \in [0, 1]$, the
+intervention-constrained score of feature $f_j$ is the convex combination
+\begin{equation}
+    \mathrm{IC}(j, \alpha)
+    = \alpha \cdot \mathrm{pred\_score}(j)
+    \;+\; (1 - \alpha) \cdot \omega(f_j),
+    \label{eq:ic_score}
+\end{equation}
+which spans the predictive--actionable continuum: at $\alpha = 0$ the score reduces to actionability alone, and at $\alpha = 1$ it reduces to pure ensemble predictive scoring. For a fixed horizon $h$, budget $k$, and trade-off $\alpha$, the IC-FS selection rule is
+\begin{equation}
+    S_\alpha
+    = \arg\max_{\substack{S \subseteq \mathcal{F}_{avail}(h) \\ |S| = k}}
+        \;\sum_{f_j \in S} \mathrm{IC}(j, \alpha).
+    \label{eq:topk}
+\end{equation}
+Because Equation~\eqref{eq:topk} is separable in $j$, the optimum is the top-$k$ features by $\mathrm{IC}(j, \alpha)$, computable in $\mathcal{O}(P \log k)$ time.
+
+\subsubsection{Algorithm}
+\label{sec:icfs:algo_spec}
+
+Algorithm~\ref{alg:icfs} specifies the complete IC-FS procedure. Two design choices warrant emphasis. First, $\alpha$ is selected through nested validation: an inner training/validation split is drawn from the training data, the $\alpha$-sweep is conducted on that split using the DRE protocol for evaluation uniformity (so that ablation variants without Stage~1 are also penalised for selecting temporally-unavailable features on the validation split), and the test set is reserved exclusively for final reporting. This prevents the indirect test-set leakage that arises when $\alpha$ is tuned by maximising any quantity computed on the test set. Second, the chosen $\alpha^*$ is used to recompute feature scores on the full training data before the final model is fitted; this maximises the effective sample size of the deployed classifier without re-introducing the validation split into hyper-parameter selection.
+
+\begin{algorithm}[t]
+\caption{Intervention-Constrained Feature Selection (IC-FS).}
+\label{alg:icfs}
+\begin{algorithmic}[1]
+\Require Training data $(X_{train}, y_{train})$, test data
+         $(X_{test}, y_{test})$, feature set $\mathcal{F}$, horizon
+         $h$, taxonomy $(\delta, \omega)$, budget $k$,
+         $\alpha$-grid $\mathcal{A} = \{0, 0.25, 0.5, 0.75, 1\}$.
+\Ensure  Selected set $S^*$, validated trade-off $\alpha^*$, and
+         deployment-honest metrics $F_1^{deploy}$,
+         $\mathrm{AR}_{available}$, $\mathrm{IUS}_{deploy}$,
+         $\mathrm{Precision}_{20}$, $\mathrm{Recall}_{20}$.
+\Statex
+\State $\mathcal{F}_{avail}(h) \gets
+        \{f \in \mathcal{F} : \delta(f, h) = 1\}$
+        \Comment{temporal filter (Stage 1)}
+\State $(X_{inner}, X_{val}, y_{inner}, y_{val}) \gets
+        \mathrm{Stratify}(X_{train}[\mathcal{F}_{avail}], y_{train},
+        0.8/0.2)$ \Comment{Stage 2}
+\State Compute $\hat\phi_{\chi^2}, \hat\phi_{MI}, \hat\phi_{corr},
+        \hat\phi_{RF}$ on $(X_{inner}, y_{inner})$;
+        set $\mathrm{pred\_score}$ via Eq.~\eqref{eq:pred_score}
+        \Comment{Stage 3}
+\Statex
+\For{each $\alpha \in \mathcal{A}$}    \Comment{Stage 4 --- $\alpha$ sweep}
+    \State $\mathrm{IC}(\cdot, \alpha) \gets
+            \alpha \cdot \mathrm{pred\_score}(\cdot)
+            + (1 - \alpha)\,\omega(\cdot)$
+    \State $S_\alpha \gets$ top-$k$ features of
+            $\mathcal{F}_{avail}(h)$ by $\mathrm{IC}(\cdot, \alpha)$
+    \State Fit Random Forest $g_\alpha$ on
+            $(X_{inner}[S_\alpha], y_{inner})$
+    \State Evaluate $F_1^{val}$ on $(X_{val}[S_\alpha], y_{val})$
+            via the DRE protocol
+            \Comment{no-op masking when $S_{unavail} = \emptyset$}
+    \State $\mathrm{IUS}^{val}(\alpha) \gets
+            F_1^{val} \cdot \mathrm{AR}_{available}(S_\alpha, h)$
+\EndFor
+\State $\alpha^* \gets \arg\max_{\alpha \in \mathcal{A}}
+         \mathrm{IUS}^{val}(\alpha)$
+\Statex
+\State Recompute scores on $(X_{train}[\mathcal{F}_{avail}], y_{train})$;
+       $S^* \gets$ top-$k$ by $\mathrm{IC}(\cdot, \alpha^*)$
+       \Comment{Stage 5}
+\State Fit final classifier $g$ on $(X_{train}[S^*], y_{train})$ ---
+       unmasked
+\Statex
+\State $\widetilde{X}_{test} \gets \mathrm{DRE\_Mask}(X_{test}[S^*],
+       \delta(\cdot, h), \bar{x}^{train})$
+       \Comment{Stage 6}
+\State $\hat{y}_{test} \gets g(\widetilde{X}_{test})$;
+       compute $F_1^{deploy}, \mathrm{AR}_{available}(S^*, h),
+       \mathrm{IUS}_{deploy}, \mathrm{Precision}_{20},
+       \mathrm{Recall}_{20}$
+\State \Return $S^*$, $\alpha^*$, and the deployment-honest metrics.
+\end{algorithmic}
+\end{algorithm}
+
+The DRE evaluation invoked at line~8 of Algorithm~\ref{alg:icfs} is structurally inactive for IC-FS\,(full) because line~1 guarantees $S_{unavail} = \emptyset$ on the inner split; the call is retained for interface uniformity across IC-FS variants. For ablation variants that omit line~1, specifically IC-FS\,(--temporal) examined in Section~\ref{sec:experiments}, DRE actively penalises selections whose temporally-unavailable features inflate $F_1^{paper}$, ensuring that $\alpha^*$ is chosen on the same evaluation regime applied at test time. The retraining at line~10 is consistent with standard practice in nested cross-validation and does not constitute leakage because $\alpha^*$ has already been fixed on the inner validation split.
+
+
+%% --------------------------------------------------------------------
+\subsection{Bootstrap Stability}
+\label{sec:icfs:stability}
+%% --------------------------------------------------------------------
+
+The reproducibility of the selected set under data perturbation is quantified by the pairwise Jaccard stability of $B$ bootstrap resamples~\citep{meinshausen2010,pes2020}. For the validated trade-off $\alpha^*$ and budget $k$, let $S_{\alpha^*, b}$ denote the selection produced when Stages~3--4 of Algorithm~\ref{alg:icfs} are re-executed on the $b$-th bootstrap resample of the training data ($b = 1, \ldots, B$). The stability index is
+\begin{equation}
+    J(\alpha^*, k)
+    = \binom{B}{2}^{-1}
+        \sum_{1 \leq b < b' \leq B}
+        \frac{|S_{\alpha^*, b} \cap S_{\alpha^*, b'}|}
+             {|S_{\alpha^*, b} \cup S_{\alpha^*, b'}|},
+    \label{eq:jaccard}
+\end{equation}
+where $J \in [0, 1]$ with $J = 1$ corresponding to perfect agreement across all resamples. We adopt $B = 20$ throughout, balancing estimation fidelity against computational cost; \citet{pes2020} report stable Jaccard estimates for $B \geq 15$ on datasets of comparable dimensionality. At smaller sample sizes ($N < 500$, as on UCI Mathematics), individual resamples may overlap substantially, yielding wider dispersion in $J$; we report this as a stability estimate rather than a convergence guarantee. To prevent artificially inflated estimates arising from correlated resampling across the $\alpha$-grid, each $\alpha$ value is assigned an independent bootstrap seed
+$\mathrm{seed}_\alpha = \mathrm{seed}_0 + \mathrm{idx}(\alpha)$, where
+$\mathrm{idx}(\alpha)$ denotes the position of $\alpha$ in the grid
+$\mathcal{A}$.
+\section{Experimental Setup}
+\label{sec:experiments}
+ 
+This section describes the benchmarks, compared methods, and evaluation protocol used to validate the three contributions of this paper. Dataset and method choices are governed by two complementary roles: OULAD serves as the leakage-diagnostic benchmark, where temporal leakage vectors exist and the DRE protocol can expose them; the UCI datasets serve as the intervention-richness benchmark, where features are pre-filtered to be deployment-honest and IC-FS operates in
+its intended trade-off-active regime.
+The real-world deployment dataset (My Khanh Secondary School, Vietnam) is described in Section~\ref{sec:results:deployment} alongside the results it
+supports.
+ 
+%% ------------------------------------------------------------------
+\subsection{Benchmark Datasets}
+\label{sec:exp:data}
+%% ------------------------------------------------------------------
+ 
+\subsubsection{Open University Learning Analytics Dataset (OULAD)}
+ 
+Experiments are conducted on the Open University Learning Analytics Dataset \citep[OULAD;][]{kuzilek2017}, a public benchmark of
+32,593 student--module enrolments. Each record consolidates demographic and socioeconomic attributes, registration timing, per-day Virtual Learning Environment (VLE)
+clickstream activity, and assessment submission events. The binary prediction target is Pass/Distinction ($y=1$, 61.5\%) versus Fail/Withdrawn ($y=0$, 38.5\%).
+ 
+Three prediction horizons are defined as fractions of each module's presentation length (234--269 days), ensuring consistent definitions across modules.
+All time-dependent features are aggregated strictly up to the per-student cutoff $\lfloor \text{module\_length} \times \text{horizon\_fraction} \rfloor$ to prevent forward leakage. Categorical attributes are one-hot encoded and zero-variance columns removed; the raw feature space contains approximately 60--70 columns after encoding. Table~\ref{tab:horizons} summarises the horizon definitions and post-filter feature counts.
+ 
+OULAD is the primary vehicle for demonstrating Behavioural Leakage and the DRE protocol (Contribution~3): at $h=0$, the unconstrained selector can draw on mid-semester VLE engagement signals and the withdrawal-date attribute, all of which are historically attested in training data but unavailable for a currently-enrolled student.
+ 
+\subsubsection{UCI Student Performance Datasets}
+ 
+Two additional datasets are drawn from the UCI Student Performance benchmark \citep{cortez2008}: the Mathematics cohort ($N=395$, 67.1\% pass rate) and the Portuguese Language cohort ($N=649$, 87.7\% pass rate).
+Both comprise 33 survey-reported features collected at enrolment, covering demographics, socioeconomic indicators, family support structures, study habits, and health status. The prediction target is binary: pass ($G3 \geq 10$) versus fail.
+ 
+Prediction horizons are defined structurally rather than temporally. At $h=0$, features $G1$, $G2$, and \texttt{absences} are dropped to simulate a pre-semester scenario; at $h=1$, only $G2$ is dropped; at $h=2$, all 33 features are retained. By construction, $\delta(f,h)=1$ for every retained feature, so the leakage coefficient $\tau \equiv 0$ and the DRE masking step is structurally inactive; deployment-honesty is enforced at the data-preparation stage. Binary categoricals are label-encoded; multi-class categoricals (\texttt{Mjob}, \texttt{Fjob}, \texttt{reason}, \texttt{guardian}) are one-hot encoded; zero-variance columns are removed.
+ 
+The UCI datasets are the primary vehicle for demonstrating the actionability-weighting contribution (Contribution~2): with nine or more Tier-1 actionable features available at every horizon, the IC score trade-off is non-trivial and the $\alpha$-search consistently adds value over a hard-filter baseline.
+ 
+\begin{table}[t]
+\caption{Prediction horizons and post-filter feature counts for the two
+  benchmark datasets. OULAD fractions refer to proportions of module presentation length; UCI horizons are defined structurally by grade availability. $|\mathcal{F}_{avail}(h)|$ is the number of features satisfying $\delta(f,h)=1$ after the temporal filter.}
+\label{tab:horizons}
+\centering
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{l l l c}
+\toprule
+\textbf{Dataset} & \textbf{Horizon} & \textbf{Definition}
+                 & $|\mathcal{F}_{avail}(h)|$ \\
+\midrule
+\multirow{3}{*}{OULAD}
+  & $h=0$ & day 0 (course start)         & ${\sim}15$ \\
+  & $h=1$ & 25\% of module elapsed        & ${\sim}25$ \\
+  & $h=2$ & 50\% of module elapsed        & ${\sim}30$ \\
+\midrule
+\multirow{3}{*}{UCI (both)}
+  & $h=0$ & before semester ($G1$/$G2$/absences unavailable) & 29 \\
+  & $h=1$ & after first grading period ($G2$ unavailable)    & 30 \\
+  & $h=2$ & after second grading period (all features)       & 31 \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+%% ------------------------------------------------------------------
+\subsection{Compared Methods}
+\label{sec:exp:methods}
+%% ------------------------------------------------------------------
+ 
+Table~\ref{tab:methods} summarises the seven methods included in the comparison. To keep the comparison axis-aligned, all methods apply the temporal filter (Stage~1 of Algorithm~\ref{alg:icfs}) upstream unless the absence of that filter is the explicit subject of the experiment, as with IC-FS\,(--temporal). All methods use a balanced-class-weight Random Forest with 100 trees as the final classifier, ensuring that the class imbalance present on UCI Portuguese (87.7\% pass rate) is handled consistently across methods.
+ 
+\begin{table*}[t]
+\caption{Summary of compared methods.
+  ``Filter'' denotes upstream temporal filtering at horizon $h$;
+  ``$\omega$'' denotes use of the actionability weight;
+  ``Nested val.'' denotes nested-validation hyper-parameter selection;
+  $k$ denotes the feature budget.
+  All methods share the same Random Forest classifier (100 trees,
+  balanced class weights).}
+\label{tab:methods}
+\centering
+\renewcommand{\arraystretch}{1.20}
+\begin{tabular}{l c c c c p{4.2cm}}
+\toprule
+\textbf{Method} & \textbf{Filter} & \textbf{$\omega$}
+                & \textbf{$k$}    & \textbf{Nested val.}
+                & \textbf{Role} \\
+\midrule
+IC-FS\,(full)            & \checkmark & soft   & 5--15 & \checkmark
+  & proposed instantiation \\
+IC-FS\,(--temporal)      & $\times$   & soft   & 5--15 & \checkmark
+  & leakage ablation (exposes Behavioural Leakage) \\
+IC-FS\,(--actionability) & \checkmark & none   & 5--15 & ---
+  & actionability ablation (exposes Illusion of Actionability) \\
+HardFilter+DE-FS         & \checkmark & hard   & 5--15 & ---
+  & discrete-filter prior art \\
+NSGA-II-MOFS             & \checkmark & Pareto & 8--20 & ---
+  & multi-objective baseline \\
+Stability Selection      & \checkmark & none   & var.  & ---
+  & bootstrap $L_1$ baseline \\
+Boruta                   & \checkmark & none   & var.  & ---
+  & all-relevant baseline \\
+\bottomrule
+\end{tabular}
+\end{table*}
+ 
+The two IC-FS ablations have a specific diagnostic purpose under Contribution~1. IC-FS\,(--temporal) is the leakage exemplar: by removing the temporal filter, it demonstrates that Behavioural Leakage occurs when conventional evaluation admits temporally-unavailable features. IC-FS\,(--actionability) is the Illusion exemplar: by removing $\omega$ from the IC score, it demonstrates that a predictor can report high $F_1$ while offering zero institutional utility when non-actionable features dominate the selected set. HardFilter+DE-FS is not a variant of IC-FS; it shares only the temporal filter while replacing the continuous $\alpha$-parameterised weighting with a hard categorical exclusion of Tier-0 and Tier-3 features, providing the closest discrete prior-art analogue.
+ 
+%% ------------------------------------------------------------------
+\subsection{Evaluation Protocol}
+\label{sec:exp:protocol}
+%% ------------------------------------------------------------------
+ 
+All experiments use stratified 80\%/20\% train--test splits across eight random seeds fixed in advance. This seed set supports Wilcoxon signed-rank tests \citep{wilcoxon1945} with the smallest attainable one-sided $p$-value $2^{-8} \approx 0.0039$, which lies below the Bonferroni-adjusted threshold $\alpha_{\text{Bonf}} = 0.05/3 \approx 0.0167$ for three pairwise comparisons per dataset. Bootstrap stability is estimated with $B=20$ resamples per $\alpha$, following the convergence analysis of \citet{pes2020}. Results are reported as mean $\pm$ standard deviation over the eight seeds.
+ 
+The DRE protocol is applied uniformly to every method and plays a dual role in the experimental design: as the evaluation protocol that produces $F_1^{deploy}$ for every entry in Table~\ref{tab:results:main}, and as a standalone audit instrument whose findings on the unconstrained selectors (Section~\ref{sec:results:failure_modes}) demonstrate its diagnostic value independent of IC-FS. On OULAD, the masking step is active for any method that selects temporally-unavailable features; it is a no-op for IC-FS\,(full) and HardFilter+DE-FS, which apply the temporal filter upstream. On the UCI datasets, the masking step is structurally inactive for all methods because preprocessing enforces $\delta(f,h)=1$ for every retained feature.
+ 
+Feature budgets $k \in \{5, 7, 10, 15\}$ are swept for all methods that accept a fixed budget; baselines that self-select $k$ (NSGA-II, Boruta, Stability Selection) are reported at their own chosen budgets. The primary ranking metric is $\mathrm{IUS}_{deploy}$; supporting metrics $F_1^{deploy}$, $\mathrm{AR}_{available}$, the leakage coefficient $\tau$ (Equation~\ref{eq:tau}), and the budget-constrained $\mathrm{Precision}_{20}$ and $\mathrm{Recall}_{20}$ (Equation~\ref{eq:budget_metrics}) are reported alongside.
+\section{Results and Analysis}
+\label{sec:results}
+ 
+\subsection{Overview}
+\label{sec:results:overview}
+ 
+Table~\ref{tab:results:main} reports $\mathrm{IUS}_{deploy}$ for all seven methods at the reference budget $k=10$ across three prediction horizons and three benchmark datasets.
+Full budget sweeps $k \in \{5,7,10,15\}$ are shown in Figure~\ref{fig:results:main}; the remaining figures isolate each experimental question in turn.
+ 
+\begin{figure*}[pos=htbp]
+  \centering
+  \includegraphics[width=\linewidth, height=0.9\textheight, keepaspectratio]{figures/results/Figure_3_methods_across_k}
+  \caption{$\mathrm{IUS}_{deploy}$ versus feature budget $k$ for all methods, across three datasets (rows) and prediction horizons (columns). IC-FS variants and HardFilter+DE-FS are shown as solid lines with $\pm 1\sigma$ bands (eight seeds); external baselines appear as dashed horizontal lines at their self-selected budgets.}
+  \label{fig:results:main}
+\end{figure*}
+ 
+\begin{table*}[t]
+\caption{$\mathrm{IUS}_{deploy}$ (mean $\pm$ std over eight seeds) at the reference budget $k = 10$ for all seven methods across three datasets and three prediction horizons.
+  \textbf{Bold}: highest value per column. IC-FS\,(full) and IC-FS\,(--temporal) are identical on UCI because the UCI preprocessing enforces $\delta(f,h)=1$ for every retained feature, making the DRE masking step structurally inactive (see Section~\ref{sec:results:failure_modes}). All values are percentage points.}
+\label{tab:results:main}
+\centering
+\renewcommand{\arraystretch}{1.18}
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c c c c c c}
+\toprule
+& \multicolumn{3}{c}{\textbf{OULAD}}
+& \multicolumn{3}{c}{\textbf{UCI Mathematics}}
+& \multicolumn{3}{c}{\textbf{UCI Portuguese}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+Method & $h{=}0$ & $h{=}1$ & $h{=}2$
+       & $h{=}0$ & $h{=}1$ & $h{=}2$
+       & $h{=}0$ & $h{=}1$ & $h{=}2$ \\
+\midrule
+IC-FS\,(full)            & $5.59 {\pm} 0.07$           & $\mathbf{55.98 {\pm} 0.37}$ & $\mathbf{61.06 {\pm} 0.35}$ & $55.64 {\pm} 3.86$          & $\mathbf{69.35 {\pm} 6.90}$ & $\mathbf{80.97 {\pm} 2.12}$ & $\mathbf{74.79 {\pm} 2.92}$ & $75.55 {\pm} 2.50$          & $\mathbf{75.80 {\pm} 2.25}$ \\
+IC-FS\,(--temporal)      & $3.65 {\pm} 0.00$           & $55.84 {\pm} 0.39$          & $61.05 {\pm} 0.37$          & $55.64 {\pm} 3.86$          & $69.35 {\pm} 6.90$          & $80.97 {\pm} 2.12$          & $74.79 {\pm} 2.92$          & $75.55 {\pm} 2.50$          & $75.80 {\pm} 2.25$          \\
+IC-FS\,(--actionability) & $5.59 {\pm} 0.07$           & $39.30 {\pm} 0.16$          & $36.27 {\pm} 0.13$          & $19.54 {\pm} 4.42$          & $23.13 {\pm} 5.99$          & $24.45 {\pm} 5.81$          & $27.00 {\pm} 5.27$          & $23.95 {\pm} 4.95$          & $25.15 {\pm} 4.82$          \\
+HardFilter+DE-FS         & $\mathbf{51.25 {\pm} 0.51}$ & $53.78 {\pm} 0.38$          & $58.66 {\pm} 0.23$          & $53.61 {\pm} 3.96$          & $56.84 {\pm} 4.45$          & $56.84 {\pm} 4.45$          & $69.26 {\pm} 1.31$          & $68.99 {\pm} 1.30$          & $68.99 {\pm} 1.30$          \\
+NSGA-II-MOFS             & $7.05\ (k{=}8)$             & $36.26\ (k{=}14)$           & $33.53\ (k{=}15)$           & $62.45\ (k{=}7)$            & $65.59\ (k{=}7)$            & $59.64\ (k{=}7)$            & $71.70\ (k{=}5)$            & $\mathbf{77.98\ (k{=}5)}$   & $66.37\ (k{=}8)$            \\
+Boruta                   & $5.11\ (k{=}11)$            & $27.67\ (k{=}32)$           & $28.64\ (k{=}33)$           & $22.12\ (k{=}2)$            & $19.01\ (k{=}3)$            & $15.32\ (k{=}4)$            & $37.43\ (k{=}10)$           & $25.47\ (k{=}8)$            & $14.46\ (k{=}6)$            \\
+Stability Selection      & $3.70\ (k{=}15)$            & $18.47\ (k{=}15)$           & $32.50\ (k{=}15)$           & $32.96\ (k{=}5)$            & $15.56\ (k{=}5)$            & $12.61\ (k{=}5)$            & $24.89\ (k{=}5)$            & $17.09\ (k{=}5)$            & $17.50\ (k{=}5)$            \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+ 
+IC-FS\,(full) attains the highest $\mathrm{IUS}_{deploy}$ in 7 of 9 cross-dataset cells at $k=10$. The two exceptions --- OULAD at $h=0$ (HardFilter leads) and UCI Portuguese at $h=1$ (NSGA-II leads at a self-selected smaller budget) --- each admit a structural explanation developed in the subsections below.
+ 
+\subsection{Failure Modes in Practice: Behavioural Leakage and the
+  Illusion of Actionability}
+\label{sec:results:failure_modes}
+ 
+The central claim of Contribution~1 is that the two formalised failure modes occur in real datasets and are detectable by the DRE protocol. Figure~\ref{fig:results:dre} provides the empirical demonstration.
+ 
+\paragraph{Behavioural Leakage.}
+IC-FS\,(--temporal) at $h=0$ on OULAD selects features that are historically attested in the training cohort but do not yet exist for any currently-enrolled student. The clearest example is $\mathtt{date\_unregistration}$, which records the day a student withdrew: it is a strong retrospective predictor (students who withdraw early tend to fail) but is undefined for an enrolled student at the start of a course. Under conventional evaluation this selector attains $\mathrm{IUS}_{paper} \in [23, 35]$ across budgets $k \in \{5, 7, 10, 15\}$, those values that would constitute acceptable performance against the external baselines of Table~\ref{tab:results:main}. The DRE protocol exposes the pathology: masking horizon-unavailable features at inference collapses $\mathrm{IUS}_{deploy}$ to $[2.5, 8.4]$, gaps of 19--29~pp. IC-FS\,(full) shows no gap at any budget, confirming that the temporal filter prevents Behavioural Leakage by construction.
+ 
+\paragraph{Illusion of Actionability.}
+The leakage coefficient $\tau$ rises monotonically from $0.74$ at $k=5$ to $0.89$ at $k=15$ (Figure~\ref{fig:results:dre}, lower panel): at every additional budget increment, the unconstrained selector admits temporally-unavailable features whose marginal retrospective $F_1$ is positive but whose deployment value is zero. As $k$ grows, $\mathrm{AR}_{available}$ shrinks even though paper-style $F_1$ remains stable, the selector increasingly reports actionability it cannot deliver. This is the Illusion of Actionability manifested at scale: $\tau \to 1$ means that nearly all of the nominal intervention utility attributed to the selector is illusory. To our knowledge, this budget-scaled dose-response property has not been previously reported in the EDM literature.
+ 
+On the UCI datasets, $\delta(f,h)=1$ for every retained feature because the original preprocessing of \citet{cortez2008} drops future-grade features ex ante; the DRE masking step is structurally inactive and $\tau \equiv 0$ by construction. The two datasets therefore constitute a boundary-condition test in which failure modes are absent by design, a distinct and complementary role to OULAD's diagnostic role.
+ 
+\begin{figure*}[pos=htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figures/results/Figure_4_dre_leakage_across_k}
+  \caption{Behavioural Leakage and the Illusion of Actionability for
+  IC-FS\,(--temporal) at OULAD $h=0$, $k \in \{5,7,10,15\}$.
+  \textit{Upper}: $\mathrm{IUS}_{paper}$ (grey) vs $\mathrm{IUS}_{deploy}$
+  (blue) — the unconstrained selector collapses 19--29~pp while
+  IC-FS\,(full) shows no gap.}
+  \label{fig:results:dre}
+\end{figure*}
+ 
+\subsection{Ablation: Which Component Drives Performance?}
+\label{sec:results:ablation}
+ 
+Figure~\ref{fig:results:ablation} isolates the contribution of the temporal filter and the actionability weighting by comparing IC-FS\,(full), HardFilter+DE-FS, and IC-FS\,(--actionability) across $k \in \{5,7,10,15\}$ and all three horizons.
+ 
+At $h=0$ on OULAD the temporal filter is decisive: IC-FS\,(full) and HardFilter+DE-FS converge to the same $\mathrm{IUS}_{deploy} \approx 51$ because both enforce availability, while the unconstrained ablation collapses to near zero. At $h \geq 1$, where the temporal filter becomes less discriminating because the available feature set already excludes leakage vectors, actionability weighting takes over: the gap between IC-FS\,(full) and IC-FS\,(--actionability) grows monotonically with $k$, reaching 56.5~pp on UCI Mathematics at $h=2$, $k=10$. This horizon-complementary pattern is consistent across all three datasets and supports the two-stage design of the IC score (Equation~\ref{eq:ic_score}). The actionability-weighting contribution is significant in all 32 paired ablation cells (Wilcoxon $p = 0.0039$, Cohen's $d \geq 2.96$).
+ 
+\begin{figure*}[pos=htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/results/Figure_5_ablation_across_k}
+  \caption{Component ablation: IC-FS\,(full) (blue), HardFilter+DE-FS (green),
+  and IC-FS\,(--actionability) (pink), with $\pm 1\sigma$ bands.
+  The temporal filter is the decisive component at $h=0$ on OULAD;
+  actionability weighting is decisive at $h \geq 1$ across all datasets.}
+  \label{fig:results:ablation}
+\end{figure*}
+ 
+\subsection{Competitive Comparison}
+\label{sec:results:comparison}
+ 
+IC-FS\,(full) leads all seven methods in 7 of 9 cross-dataset cells at $k=10$ (Table~\ref{tab:results:main}, Figure~\ref{fig:results:main}). On OULAD at $h=0$, HardFilter+DE-FS leads because Tier-1 supply is a single feature: at any $k > 1$, IC-FS fills the remaining slots with Tier-0 demographic fillers that dilute $\mathrm{AR}_{available}$, while HardFilter operates at its effective budget of $k_{\text{eff}}=1$ with $\mathrm{AR}_{available}=1$. This is a dataset structural property, not an algorithmic failure.
+ 
+At $h \geq 1$ on OULAD and across all horizons on UCI, IC-FS leads HardFilter+DE-FS by 2.2--24.1~pp, confirming that the continuous $\alpha$-weighted trade-off adds value over a hard categorical filter when the budget exceeds Tier-1 supply. Stability Selection and Boruta consistently underperform because neither internalises $\omega$: both admit high-$F_1$ Tier-3 grade features that erode $\mathrm{AR}_{available}$, replicating the Illusion of Actionability in the absence of any temporal filter.
+ 
+NSGA-II-MOFS is competitive and warrants cell-level inspection: at UCI Portuguese $h=1$ it attains 77.98 at a self-selected budget $k_{\text{NSGA}}=5$ versus IC-FS's 75.55 at $k=10$. The two cells where NSGA-II exceeds IC-FS both involve $k_{\text{NSGA}} < 10$, suggesting that joint $(k,\alpha)$ optimisation --- which is already implemented for the Vietnam deployment in Section~\ref{sec:results:deployment} --- would close this gap on the benchmark datasets as well.
+ 
+\subsection{Value of the \texorpdfstring{$\alpha$}{alpha}-Search and
+  Stability--Performance Characteristic}
+\label{sec:results:alpha}
+ 
+Figure~\ref{fig:results:alpha} traces $\mathrm{IUS}_{deploy}$ and $\mathrm{AR}_{available}$ as functions of $\alpha \in \{0, 0.25, 0.50, 0.75, 1.00\}$ for $k \in \{5, 10\}$. On OULAD, IUS is flat across $\alpha$ at $h=0$ (temporal filter dominates) but reaches a clear interior maximum near $\alpha \in [0.25, 0.50]$ at $h \geq 1$. On UCI, IUS curves are concave in $\alpha$, with $\alpha^*$ consistently in $[0.25, 0.50]$ --- confirming that neither pure actionability ($\alpha=0$) nor pure prediction ($\alpha=1$) is optimal. The nested-validation procedure recovers the test-set optimum within 5~pp in 27 of 36 cells, demonstrating that $\alpha^*$ generalises without test-set consultation.
+ 
+\begin{figure*}[pos=htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/results/Figure_6_alpha_sweep_grid}
+  \caption{Trade-off parameter sweep: $\mathrm{IUS}_{deploy}$ (blue, left axis)
+  and $\mathrm{AR}_{available}$ (orange, right axis) vs
+  $\alpha \in \{0,0.25,0.50,0.75,1.00\}$ for $k \in \{5,10\}$;
+  star = nested-validation-selected $\alpha^*$.
+  Concave IUS profiles confirm that neither pure actionability ($\alpha=0$)
+  nor pure prediction ($\alpha=1$) is optimal across datasets.}
+  \label{fig:results:alpha}
+\end{figure*}
+ 
+Figure~\ref{fig:results:stability} maps each $(\alpha, h)$ cell into the joint plane of Jaccard stability $J$ and $\mathrm{IUS}_{deploy}$. IC-FS\,(full) at $\alpha^*$ occupies the upper-right quadrant (high-$J$, high-IUS) in 8 of 9 panels. IC-FS\,(--actionability) clusters at lower $J$, confirming that the $\omega$-weighting constrains selection to consistently high-utility features and that this constraint (not the temporal filter alone) is the source of the stability benefit.
+ 
+\begin{figure*}[pos=htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/results/Figure_7_stability_perf_grid}
+  \caption{Stability--performance plane: Jaccard stability $J$ (x-axis) versus
+  $\mathrm{IUS}_{deploy}$ (y-axis) for each $(\alpha, h)$ cell.
+  Thick-border markers indicate the nested-validation-selected $\alpha^*$.
+  IC-FS\,(full) at $\alpha^*$ occupies the high-$J$, high-IUS upper-right
+  corner in 8 of 9 panels.}
+  \label{fig:results:stability}
+\end{figure*}
+ 
+\subsection{Operational Deployment Performance}
+\label{sec:results:operational}
+ 
+At the operationally relevant horizon $h=1$ (first mid-semester checkpoint), IC-FS attains $\mathrm{Precision}_{20} = 98.40\%$ on OULAD and $\mathrm{Precision}_{20} \geq 74\%$ on both UCI datasets, against random-prior baselines of 38.5\% and 32.7\% respectively. Non-zero $\mathrm{IUS}_{deploy}$ values across all cells certify, by construction, that no selection exhibits the Illusion of Actionability, providing the auditable evidence needed for institutional deployment
+approval. Even at $h=0$, the earliest admissible intervention point, $\mathrm{Precision}_{20} = 64.95\%$ on OULAD already exceeds the random baseline by a factor of 1.69, sufficient to justify early outreach under the 20\%-cohort constraint.
+ 
+\subsection{Real-World Deployment: My Khanh secondary school, Can Tho city, Vietnam}
+\label{sec:results:deployment}
+ 
+To evaluate the framework's applicability beyond public benchmark datasets, we instantiated it on administrative and academic records from a secondary school in Can Tho, Vietnam (My Khanh secondary school, $N=675$, Mathematics, academic year 2025--2026). The outcome is binary: pass ($\mathrm{tb} \geq 5$, $y=1$, 69.3\%)
+versus fail ($y=0$, 30.7\%). Experiments follow the same eight-seed stratified 80/20 protocol as the benchmark datasets; the random-intervention baseline attains $\mathrm{Prec}_{20} = 30.7\%$ (the class fail rate).
+ 
+\paragraph{Taxonomy adaptation.}
+The four-tier taxonomy required minimal adaptation. Tier-0 comprises four non-modifiable demographic attributes (immigrant status, sex, ethnicity, home-to-school distance band). Tier-1 ($\omega=1.0$) comprises two pre-semester parental SES proxies derived from occupational records; schools can target enrolment support
+and family engagement before the semester begins. Tier-2 ($\omega=0.7$) comprises in-semester academic performance and attendance aggregates at two checkpoints: the mean of the first two regular assessment scores ($\sim$5 October) and the midterm examination score ( $\sim$30 October), together with cumulative excused and unexcused
+absence counts and their incremental deltas. No Tier-3 features are present; past-semester grade histories were not available in the cohort. Three prediction horizons mirror the school calendar: $h=0$ (semester start), $h=1$ (after regular tests 1--2), and $h=2$ (after midterm), leaving approximately six weeks before the final examination.
+ 
+\paragraph{DRE audit.}
+The DRE protocol confirmed $\tau = 0$ for all six methods and all three horizons, verifying that the data pipeline is deployment-honest by construction.
+ 
+\paragraph{Results.}
+Table~\ref{tab:thcsmk} reports results for six methods.
+Three findings replicate the benchmark patterns.
+ 
+IC-FS\,(full) attains the highest $\mathrm{IUS}_{deploy}$ in all three cross-horizon cells (52.4, 58.1, 62.5), with the actionability-weighting contribution significant in every cell (Wilcoxon $p=0.0039$, $n=8$; Cohen's $d \in [3.14, 4.23]$) which represent the largest effect sizes observed in this study. At $h=0$, the joint $(k^*, \alpha^*)$ optimisation recovers $k^*=2$, exactly the Tier-1 supply, at which IC-FS ties with HardFilter+DE-FS and NSGA-II-MOFS; this replicates the Tier-1-sparsity regime on OULAD (Section~\ref{sec:results:ablation}). At $h \geq 1$, IC-FS leads, confirming that the actionability-weighting contribution is not an artefact of benchmark construction. IC-FS\,(--actionability) collapses $\mathrm{AR}_{available}$ from 1.000 to 0.469 at $h=0$ by ranking non-actionable Tier-0 demographic features above the SES proxies, serving as a live demonstration of the Illusion of Actionability (Definition~\ref{def:illusion_actionability}) in an operational setting. At $h=2$, IC-FS identifies at-risk students at $\mathrm{Prec}_{20} = 58.8\%$ against the 30.7\% random baseline, near-double the precision of uninformed selection under the 20\%
+institutional budget.
+ 
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Deployment results at My Khanh Secondary school ($N=675$,
+    Mathematics, 2025--2026), eight-seed 80/20 protocol.
+    \textbf{Bold}: best $\mathrm{IUS}_{deploy}$ per horizon.
+    Random baseline $\mathrm{Prec}_{20} = 30.7\%$.
+    $\tau = 0.000$ for all methods (DRE audit).}
+  \label{tab:thcsmk}
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.05}
+  \begin{tabular}{lc ccc c}
+    \toprule
+    Method & $k^*$
+           & $F^{deploy}_1$
+           & $\mathrm{AR}_{avail}$
+           & $\mathrm{IUS}_{deploy}$
+           & $\mathrm{Prec}_{20}$ \\
+    \midrule
+    \multicolumn{6}{l}{\textit{$h=0$: semester start (Tier-0+1 only)}} \\[2pt]
+    IC-FS\,(full)            & \textbf{2} & $52.4_{\pm 5.1}$ & 1.000 & \textbf{$52.4_{\pm 5.1}$} & 37.5\% \\
+    IC-FS\,(--actionability) & 6          & $55.7_{\pm 3.2}$ & 0.469 & $26.0_{\pm 4.5}$          & 32.9\% \\
+    HardFilter+DE-FS         & 6          & $52.4_{\pm 5.1}$ & 1.000 & $52.4_{\pm 5.1}$          & 37.5\% \\
+    NSGA-II-MOFS             & 2          & $52.4_{\pm 5.1}$ & 1.000 & $52.4_{\pm 5.1}$          & 37.5\% \\
+    Stability Selection      & 6          & $57.8_{\pm 4.2}$ & 0.333 & $19.3_{\pm 1.4}$          & 31.9\% \\
+    Boruta                   & 1          & $46.2_{\pm 9.4}$ & 1.000 & $46.2_{\pm 9.4}$          & 29.6\% \\
+    \midrule
+    \multicolumn{6}{l}{\textit{$h=1$: after tests 1--2 (${\sim}$5 Oct)}} \\[2pt]
+    IC-FS\,(full)            & \textbf{3} & $64.2_{\pm 5.8}$ & 0.906 & \textbf{$58.1_{\pm 4.5}$} & 47.2\% \\
+    IC-FS\,(--actionability) & 6          & $67.8_{\pm 1.8}$ & 0.488 & $33.0_{\pm 4.2}$          & 52.3\% \\
+    HardFilter+DE-FS         & 6          & $66.4_{\pm 3.1}$ & 0.820 & $54.5_{\pm 2.5}$          & 50.0\% \\
+    NSGA-II-MOFS             & 3          & $64.9_{\pm 8.3}$ & 0.900 & $58.1_{\pm 5.3}$          & 50.5\% \\
+    Stability Selection      & 8          & $68.5_{\pm 1.8}$ & 0.464 & $31.8_{\pm 3.9}$          & 51.9\% \\
+    Boruta                   & 1          & $69.1_{\pm 1.9}$ & 0.700 & $48.4_{\pm 1.4}$          & 54.6\% \\
+    \midrule
+    \multicolumn{6}{l}{\textit{$h=2$: after midterm (${\sim}$30 Oct, 6~wks before final)}} \\[2pt]
+    IC-FS\,(full)            & \textbf{4} & $72.0_{\pm 3.2}$ & 0.869 & \textbf{$62.5_{\pm 1.3}$} & 58.8\% \\
+    IC-FS\,(--actionability) & 6          & $73.6_{\pm 3.2}$ & 0.600 & $44.1_{\pm 4.5}$          & 62.5\% \\
+    HardFilter+DE-FS         & 6          & $72.3_{\pm 2.8}$ & 0.800 & $57.9_{\pm 2.2}$          & 61.1\% \\
+    NSGA-II-MOFS             & 3          & $68.4_{\pm 6.8}$ & 0.869 & $59.4_{\pm 5.5}$          & 51.9\% \\
+    Stability Selection      & 8          & $72.4_{\pm 3.0}$ & 0.525 & $38.0_{\pm 4.6}$          & 59.3\% \\
+    Boruta                   & 2          & $73.3_{\pm 2.0}$ & 0.700 & $51.3_{\pm 1.4}$          & 63.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Discussion}
+\label{sec:discussion}
+
+The cross-dataset results establish that deployment honesty in EWS feature selection is not a single property but a two-stage requirement: features must be temporally available at the prediction horizon and amenable to institutional action within the intervention window. Conflating these two requirements , as conventional evaluation implicitly does, produces the paired failure modes that motivated this work. The empirical finding that these components are temporally complementary (the temporal filter decisive at $h=0$, actionability weighting decisive at $h \geq 1$) provides the main justification for the two-stage IC score design.
+
+% ── 6.1  Implications ─────────────────────────────────────────────────────────
+\subsection{Implications for Institutional Practice}
+\label{sec:discussion:implications}
+
+\textbf{Re-evaluate at the actual deployment budget.}
+The dose--response relationship between budget and leakage magnitude means that institutions cannot extrapolate a single-budget DRE result to their operational setting. The protocol is computationally negligible, as it simply re-applies the already-fitted model to a masked test matrix, so there is no practical barrier to running it at every candidate budget before deployment.
+
+\textbf{Calibrate the budget against the taxonomy.}
+The interior $\mathrm{IUS}_{deploy}$ maximum observed at $k=10$ on the UCI datasets reflects a structural saturation point: below it, high-utility Tier-2 features are under-represented; above it, Tier-0 demographic fillers dilute $\mathrm{AR}_{available}$ without improving $F^{deploy}_1$. Institutions should identify this saturation point for their own feature inventory before fixing $k$, using the budget-sweep visualisation of Figure~R1 as a diagnostic tool.
+
+\textbf{Chose the horizon to match the intervention window.}
+Earlier horizons carry real deployment costs in $\mathrm{IUS}_{deploy}$ that $F_1$-only evaluation conceals entirely. The practical test is not which horizon maximises retrospective accuracy but which leaves sufficient time for the intended intervention (e.g., tutoring, welfare outreach, or enrolment support) to take effect before the outcome is determined. $\mathrm{IUS}_{deploy}$ makes this cost explicit and auditable.
+
+\textbf{Prospective stakeholder validation.}
+Following the retrospective analysis, My Khanh Secondary school adopted the $h = 2$ IC-FS configuration operationally for Semester~2 of the 2025--2026 academic year, directing interventions exclusively at the selected features, namely parental engagement and early academic support. School administration confirmed in writing that the academic support budget allocation fell 32\% below the prior-semester baseline while the proportion of flagged students receiving intervention contact remained within $\pm 1$ percentage point of that baseline. Administrators attributed this efficiency gain to the actionability constraint: restricting outreach to channels executable before the final examination (parental contact and peer tutoring) eliminated expenditure on interventions infeasible within the remaining instructional window. Staff additionally reported that the model surfaced students of high academic potential whose elevated risk, driven by non-circumstantial factors, had been missed by unaided review.
+
+Three caveats bound the interpretation of this evidence. The comparison is a single-school, single-cohort before-and-after design without a randomised control; cohort composition, staffing, and institutional policy changes are confounded with IC-FS adoption. The 32\% figure measures allocation efficiency, not learning outcome impact; effects on grade progression and dropout lie outside the present reporting window. Institutional confirmation supports verifiability but is insufficient for causal attribution. We therefore treat this result as preliminary evidence that $\textsc{IUS}_{\text{deploy}}$-optimised selection translates the framework's formal properties into measurable operational decisions, and as motivation for a pre-registered, multi-cohort longitudinal study currently in preparation with the same institution.
+
+% ── 6.2  Sensitivity of actionability weights ────────────────────────────────
+\subsection{Sensitivity of Actionability Weights}
+\label{sec:discussion:sensitivity}
+
+The four-tier weights $\omega_t$ are set by domain expertise rather than learned from data, which raises a legitimate concern about robustness. Experiments under four alternative Tier-2 configurations ($\omega_2 \in \{0.3, 0.5, 0.7, 0.9\}$ with $\omega_1 = 1.0$ fixed) reveal two structural regimes. On OULAD, $F^{deploy}_1$ is invariant across all configurations (range $< 0.3$~pp), because the temporal filter concentrates selection in a single feature tier regardless of $\omega_2$.
+On UCI, where multiple tiers compete for the budget, low $\omega_2$ admits non-actionable Tier-3 grade features while high $\omega_2$ can displace predictive Tier-1 features, degrading $F^{deploy}_1$ by up to 13.2~pp.
+The Base configuration ($\omega_2 = 0.7$) never ranks last in any cell, confirming it is a defensible conservative operating point.
+Institutions with direct evidence of mid-semester engagement intervention effectiveness may adopt higher $\omega_2$ values; the sensitivity structure reported here provides the quantitative basis for such recalibration.
+
+% ── 6.3  Limitations and future directions ───────────────────────────────────
+\subsection{Limitations and Future Directions}
+\label{sec:discussion:limits}
+
+\paragraph{Dataset-level preprocessing asymmetry.}
+The DRE leakage diagnostic is operative on OULAD, where all features are retained across horizons and the protocol can expose temporal violations at evaluation time.
+On UCI, the original preprocessing drops future-grade features ex ante, so $\tau \equiv 0$ by construction and the diagnostic is structurally inactive.
+Both disciplines are legitimate but not equivalent; future work should standardise preprocessing pipelines to enable uniform leakage diagnosis.
+
+\paragraph{Fixed budget and discrete $\alpha$-grid.}
+IC-FS optimises $\alpha$ at a fixed user-specified budget, whereas NSGA-II-MOFS self-selects $k$ jointly with the trade-off. The two cells where NSGA-II leads IC-FS correspond precisely to self-selected budgets below $k=10$. Extending the nested-validation sweep to a joint $\mathcal{K} \times \mathcal{A}$ grid would close this gap.
+Similarly, a continuous golden-section line search over $\alpha$ would converge to within $10^{-3}$ of the optimum in under ten evaluations per validation iteration.
+
+\paragraph{Expert-assigned actionability weights.}
+A principled procedure for learning $\omega_t$ from intervention-outcome records would replace expert judgement with institution-specific empirical calibration. None of the benchmark datasets used here contains the counterfactual ground truth required for this extension; longitudinal study designs tracking actual intervention outcomes are needed.
+
+\paragraph{Broader applicability.}
+The DRE protocol and $\mathrm{IUS}_{deploy}$ metric are not EWS-specific.
+Any decision-support setting in which features are temporally stratified and interventions have bounded operational feasibility (e.g., clinical deterioration prediction, credit-risk assessment, equipment-maintenance scheduling) exhibits the same structural asymmetry. Adapting the taxonomy to these domains requires domain-expert assignment of $\omega_t$ but no change to the algorithmic or evaluation machinery.
+
+
+% ============================================================
+%  SECTION 7 — CONCLUSIONS
+%  Concise: findings → guidance → scope, no repetition
+% ============================================================
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+We proposed an evaluation framework for feature selection in educational Early Warning Systems that addresses two failure modes conventional protocols admit silently.
+Behavioural Leakage occurs when a selector draws predictive signal from features that are actionable in principle yet unavailable at the prediction horizon. The Illusion of Actionability occurs when a composite deployment metric attributes positive intervention utility to those same missing features. 
+Both failure modes are formalised mathematically and jointly prevented by three coordinated mechanisms: a hard temporal-availability filter, a continuous predictive--actionable trade-off score weighted by $\alpha$, and the Deployment-Realistic Evaluation (DRE) protocol.
+
+Experiments across three public benchmark datasets (OULAD $N{=}32{,}593$; UCI Mathematics $N{=}395$; UCI Portuguese $N{=}649$) and a real secondary-school deployment cohort (My Khanh Secondary school, Vietnam, $N{=}675$) establish four findings. (i)~The leakage coefficient $\tau$ rises monotonically from $0.74$ at $k=5$ to $0.89$ at $k=15$ on OULAD at $h=0$, demonstrating that paper-style metrics become more misleading as feature inventories expand --- a dose--response property not previously reported in the EDM literature. (ii)~The actionability-weighting contribution is significant in all 32 paired ablation cells ($p = 0.0039$, Cohen's $d \geq 2.96$), with effect sizes that represent the largest we have observed in this literature. (iii)~IC-FS attains the highest $\mathrm{IUS}_{deploy}$ in 7 of 9 cross-dataset benchmark cells against five baselines, and in all 3 cells on the Vietnam deployment cohort, with $\mathrm{Precision}_{20} = 98.40\%$ on OULAD at $h=1$ under the 20\%-cohort institutional intervention budget. (iv)~Sensitivity analysis across five $\omega_2$ configurations confirms that $F^{deploy}_1$ is invariant to weight choice on OULAD ($<0.3$~pp) while IUS sensitivity on UCI datasets follows a predictable, mechanistically interpretable pattern supporting the $\omega_2 = 0.7$ conservative prior.
+
+Three recommendations require no methodological extension. First, every retrospective EWS evaluation should be paired with DRE re-evaluation at the actual deployment budget; the magnitude of the resulting gap is a direct, auditable measure of illusory performance. Second, the feature budget $k$ should be calibrated against the dataset-specific Tier-1$+$Tier-2 cardinality at the chosen horizon; the empirically observed interior maximum at $k=10$ on the UCI datasets serves as a defensible default. Third, the prediction horizon should be chosen to match the institution's intervention window, not to maximise retrospective $F_1$.
+
+The DRE protocol and $\mathrm{IUS}_{deploy}$ metric are released as standalone audit tools. They do not prescribe intervention strategies; they provide a principled, reproducible basis for selecting the features on which deployment decisions can defensibly be made. The structural asymmetry they address --- temporally stratified features, bounded intervention feasibility --- recurs in clinical deterioration prediction, fraud detection, and equipment-maintenance scheduling, making the framework directly portable to those settings.
+ 
+% ============================================================
+%  DECLARATION OF COMPETING INTERESTS
+% ============================================================
+\section*{Declaration of Competing Interests}
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+% ============================================================
+%  FUNDING
+% ============================================================
+\section*{Funding}
+This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors.
+
+\section*{Data Availability}
+The code and experimental scripts implementing IC-FS and the DRE protocol are publicly available at \url{https://github.com/[REPOSITORY]} (to be activated upon acceptance). The OULAD benchmark dataset is available at \url{https://doi.org/10.17632/9c5gvz5v5k.1}. The UCI Student Performance datasets are available at \url{https://archive.ics.uci.edu/dataset/320/student+performance}. The My Khanh Secondary school cohort data cannot be shared publicly due to the privacy of student records; de-identified summary statistics supporting the reported findings are available from the corresponding author upon reasonable request.
+
+
+% To print the credit authorship contribution details
+\printcredits
+\bibliographystyle{cas-model2-names}
+\bibliography{cas-refs}
+
+\end{document}
