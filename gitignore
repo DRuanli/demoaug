@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Generated experiment outputs
+# (regenerate from scratch with `python scripts/run_experiment.py`)
+results/*.csv
+results/*.json
+results/*.md
+figures/*.png
+
+# But keep these placeholders so the directories exist
+!results/.gitkeep
+!figures/.gitkeep
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Hugging Face caches (large)
+~/.cache/huggingface/
+*.safetensors
+*.bin
